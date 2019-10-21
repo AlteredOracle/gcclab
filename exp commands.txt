@@ -1,0 +1,214 @@
+//HADOOP
+sudo apt-get install openjdk-8-jdk
+or
+sudo apt-get install default-jdk
+
+gedit /etc/environment
+JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64"(copy this location from command 3)
+save the file
+source /etc/environment
+echo $JAVA_HOME
+sudo apt-get install ssh
+ssh-keygen -t rsa -P ""
+cat $HOME/.ssh/id_rsa.pub >> $HOME/.ssh/authorized_keys
+ssh localhost
+
+//bashrc
+#HADOOP VARIABLES START
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+export HADOOP_INSTALL=/home/rec/hadoop-2.7.2
+export PATH=$PATH:$HADOOP_INSTALL/bin
+export PATH=$PATH:$HADOOP_INSTALL/sbin
+export HADOOP_MAPRED_HOME=$HADOOP_INSTALL
+export HADOOP_COMMON_HOME=$HADOOP_INSTALL
+export HADOOP_HDFS_HOME=$HADOOP_INSTALL
+export YARN_HOME=$HADOOP_INSTALL
+export HADOOP_COMMON_LIB_NATIVE_DIR=$HADOOP_INSTALL/lib/native
+export HADOOP_OPTS="-Djava.library.path=$HADOOP_INSTALL/lib"
+#HADOOP VARIABLES END
+
+wget https://archive.apache.org/dist/hadoop/core/hadoop-2.7.2/hadoop-2.7.2.tar.gz
+bit.ly/hadoop22
+
+//hadoop-env.sh
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+
+//hdfs-site.xml
+<property>
+  <name>dfs.replication</name>
+  <value>1</value>
+  <description>Default block replication.
+  The actual number of replications can be specified when the file is created.
+  The default is used if replication is not specified in create time.
+  </description>
+ </property>
+ <property>
+   <name>dfs.namenode.name.dir</name>
+  <value>file:/home/rec/hadoop_store/hdfs/namenode</value>
+ </property>
+ <property>
+   <name>dfs.datanode.data.dir</name>
+   <value>file:/home/rec/hadoop_store/hdfs/datanode</value>
+ </property>
+
+//core-site.xml
+
+<property>
+  <name>hadoop.tmp.dir</name>
+  <value>/home/rec/hadoop-2.7.2/tmp</value>
+  <description>A base for other temporary directories.</description>
+ </property>
+ 
+ <property>
+  <name>fs.default.name</name>
+  <value>hdfs://localhost:54310</value>
+  <description>The name of the default file system.  A URI whose
+  scheme and authority determine the FileSystem implementation.  The
+  uri's scheme determines the config property (fs.SCHEME.impl) naming
+  the FileSystem implementation class.  The uri's authority is used to
+  determine the host, port, etc. for a filesystem.</description>
+ </property>
+
+cp mapred-site.xml.template mapred-site.xml
+//mapred-site.xml
+<property>
+  <name>mapred.job.tracker</name>
+  <value>localhost:54311</value>
+  <description>The host and port that the MapReduce job tracker runs
+  at.  If "local", then jobs are run in-process as a single map
+  and reduce task.
+  </description>
+ </property>
+
+
+//hadoop fuse
+wget http://archive.cloudera.com/cdh5/one-click-install/trusty/amd64/cdh5-repository_1.0_all.deb
+wget bit.ly/fusedebwrk
+sudo dpkg -i cdh5-repository_1.0_all.deb
+sudo apt-get update
+sudo apt-get install hadoop-hdfs-fuse
+sudo mkdir -p <mount_point>
+Sample :sudo mkdir -p file
+sudo -H gedit /etc/samba/smb.conf
+sudo usermod -a -G sambashare $USER
+//usershare owner only = false
+sudo restart smbd
+restart the pc
+sudo hadoop-fuse-dfs dfs://localhost:54310 file -o nonempty
+
+
+//api
+//program
+import org.apache.hadoop.conf.Configured;
+import org.apache.hadoop.util.Tool;
+import java.io.BufferedInputStream;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.util.ToolRunner;
+public class HdfsWriter extends Configured implements Tool {
+ public static final String FS_PARAM_NAME = "fs.defaultFS";
+public int run(String[] args) throws Exception {
+ if (args.length < 2) {
+ System.err.println("HdfsWriter /home/rec/Desktop/input/file.txt /hello");
+ return 1;
+ }
+ String localInputPath = args[0];
+ Path outputPath = new Path(args[1]);
+ Configuration conf = getConf();
+ System.out.println("configured filesystem = " + conf.get(FS_PARAM_NAME));
+ FileSystem fs = FileSystem.get(conf);
+ if (fs.exists(outputPath)) {
+ System.err.println("output path exists");
+ return 1;
+ }
+ OutputStream os = fs.create(outputPath);
+ InputStream is = new BufferedInputStream(new FileInputStream(localInputPath));
+ IOUtils.copyBytes(is, os, conf);
+ return 0;
+ }
+ public static void main( String[] args ) throws Exception {
+ int returnCode = ToolRunner.run(new HdfsWriter(), args);
+ System.exit(returnCode);
+ }
+}
+
+
+hadoop jar /home/rec/Desktop/Untitled.jar /home/rec/Desktop/input/file.txt /hello
+
+//WordCount
+//WordCount.jar
+import java.io.IOException;
+import java.util.StringTokenizer;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+ 
+public class WordCount {
+ 
+  public static class TokenizerMapper
+       extends Mapper<Object, Text, Text, IntWritable>{
+ 
+    private final static IntWritable one = new IntWritable(1);
+    private Text word = new Text();
+ 
+    public void map(Object key, Text value, Context context
+                    ) throws IOException, InterruptedException {
+      StringTokenizer itr = new StringTokenizer(value.toString());
+      while (itr.hasMoreTokens()) {
+        word.set(itr.nextToken());
+        context.write(word, one);
+      }
+    }
+  }
+ 
+  public static class IntSumReducer
+       extends Reducer<Text,IntWritable,Text,IntWritable> {
+    private IntWritable result = new IntWritable();
+ 
+    public void reduce(Text key, Iterable<IntWritable> values,
+                       Context context
+                       ) throws IOException, InterruptedException {
+      int sum = 0;
+      for (IntWritable val : values) {
+        sum += val.get();
+      }
+      result.set(sum);
+      context.write(key, result);
+    }
+  }
+ 
+  public static void main(String[] args) throws Exception {
+    Configuration conf = new Configuration();
+    Job job = Job.getInstance(conf, "word count");
+    job.setJarByClass(WordCount.class);
+    job.setMapperClass(TokenizerMapper.class);
+    job.setCombinerClass(IntSumReducer.class);
+    job.setReducerClass(IntSumReducer.class);
+    job.setOutputKeyClass(Text.class);
+    job.setOutputValueClass(IntWritable.class);
+    FileInputFormat.addInputPath(job, new Path(args[0]));
+    FileOutputFormat.setOutputPath(job, new Path(args[1]));
+    System.exit(job.waitForCompletion(true) ? 0 : 1);
+  }
+}
+
+export HADOOP_CLASSPATH=$(hadoop classpath)
+echo $HADOOP_CLASSPATH
+hadoop fs –mkdir /WordCount
+hadoop fs –mkdir /WordCount/Input
+hadoop fs -put '/home/rec/Desktop/wordcount/input/file.txt' /WordCount/Input
+javac -classpath ${HADOOP_CLASSPATH} -d '/home/rec/Desktop/wordcount/classes' '/home/rec/Desktop/wordcount/WordCount.java'
+jar -cvf word.jar -C classes/ .
+hadoop jar '/home/rec/Desktop/wordcount/word.jar' WordCount /WordCount/Input /WordCount/Output
+hadoop dfs -cat /WordCount/Output/*
